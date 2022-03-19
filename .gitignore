@@ -1,5 +1,3 @@
 build/
 *.old
 *.o
-*.devcontainer
-*.vscode
