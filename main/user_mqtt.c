@@ -33,17 +33,11 @@
 
 static const char *TAG = "mqtt_task";
 
-static const char *controls_device1 = "ctu/khuongiot/idb1806262/controls/device1";
-static const char *controls_device2 = "ctu/khuongiot/idb1806262/controls/device2";
-static const char *controls_device3 = "ctu/khuongiot/idb1806262/controls/device3";
-static const char *controls_device4 = "ctu/khuongiot/idb1806262/controls/device4";
-
-static const char *status_device1 = "ctu/khuongiot/idb1806262/status/device1";
-static const char *status_device2 = "ctu/khuongiot/idb1806262/status/device2";
-static const char *status_device3 = "ctu/khuongiot/idb1806262/status/device3";
-static const char *status_device4 = "ctu/khuongiot/idb1806262/status/device4";
 
 uint8_t GPIO_OUTPUT_IO[4];
+bool led_state[4];
+const char *controls_device[4];
+const char *status_device[4];
 
 
 extern QueueHandle_t xQueuePublish;
@@ -77,24 +71,17 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
    switch ((esp_mqtt_event_id_t)event_id) {
    case MQTT_EVENT_CONNECTED:
       ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-
-     	msg_id = esp_mqtt_client_subscribe(client, controls_device1, 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-      msg_id = esp_mqtt_client_subscribe(client, controls_device2, 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-      msg_id = esp_mqtt_client_subscribe(client, controls_device3, 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
-      msg_id = esp_mqtt_client_subscribe(client, controls_device4, 0);
-      ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
-
+      for(int i = 0; i < 4; i++){
+         msg_id = esp_mqtt_client_subscribe(client, controls_device[i], 0);
+         ESP_LOGI(TAG, "sent subscribe successful, msg_id=%d", msg_id);
+         xEventGroupSetBits(mqtt_status_event_group, MQTT_CONNECTED_BIT);
+      }
       //msg_id = esp_mqtt_client_unsubscribe(client, "topic/qos1");
       //ESP_LOGI(TAG, "sent unsubscribe successful, msg_id=%d", msg_id);
       break;
    case MQTT_EVENT_DISCONNECTED:
       ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
+      xEventGroupClearBits(mqtt_status_event_group, MQTT_CONNECTED_BIT);
       break;
 
    case MQTT_EVENT_SUBSCRIBED:
@@ -112,47 +99,20 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
       ESP_LOGI(TAG, "MQTT_EVENT_DATA");
       printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
       printf("DATA=%.*s\r\n", event->data_len, event->data);
-
-      if (strncmp(event->topic, controls_device1, event->topic_len) == 0) {
-			if (strncmp(event->data, "on", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn on device 1");
-				esp_mqtt_client_publish(client, status_device1, "on", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[0], 1);
-     		} else if(strncmp(event->data, "off", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn off device 1");
-				esp_mqtt_client_publish(client, status_device1, "off", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[0], 0);
-     		}    
-      } else if (strncmp(event->topic, controls_device2, event->topic_len) == 0){
-      	if (strncmp(event->data, "on", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn on device 2");
-				esp_mqtt_client_publish(client, status_device2, "on", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[1], 1);
-     		} else if(strncmp(event->data, "off", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn off device 2");
-				esp_mqtt_client_publish(client, status_device2, "off", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[1], 0);
-     		}
-      } else if (strncmp(event->topic, controls_device3, event->topic_len) == 0){
-      	if (strncmp(event->data, "on", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn on device 3");
-				esp_mqtt_client_publish(client, status_device3, "on", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[2], 1);
-     		} else if(strncmp(event->data, "off", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn off device 3");
-				esp_mqtt_client_publish(client, status_device3, "off", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[2], 0);
-     		}
-      } else if (strncmp(event->topic, controls_device4, event->topic_len) == 0){
-      	if (strncmp(event->data, "on", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn on device 4");
-				esp_mqtt_client_publish(client, status_device4, "on", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[3], 1);
-     		} else if(strncmp(event->data, "off", event->data_len) == 0) {
-				ESP_LOGI(TAG, "Turn off device 4");
-				esp_mqtt_client_publish(client, status_device4, "off", 0, 0, 0);
-				gpio_set_level(GPIO_OUTPUT_IO[3], 0);
-     		}
+      for(int i = 0; i < 4; i++){
+         if (strncmp(event->topic, controls_device[i], event->topic_len) == 0) {
+			   if (strncmp(event->data, "on", event->data_len) == 0) {
+				   ESP_LOGI(TAG, "Turn on device %d", i);
+				   esp_mqtt_client_publish(client, status_device[i], "on", 0, 0, 0);
+				   gpio_set_level(GPIO_OUTPUT_IO[i], 1);
+               led_state[i] = true;
+     		   } else if(strncmp(event->data, "off", event->data_len) == 0) {
+				   ESP_LOGI(TAG, "Turn off device %d", i);
+				   esp_mqtt_client_publish(client, status_device[i], "off", 0, 0, 0);
+				   gpio_set_level(GPIO_OUTPUT_IO[i], 0);
+               led_state[i] = false;
+     		   }
+         }
       }
       break;
    case MQTT_EVENT_ERROR:
@@ -197,14 +157,15 @@ void mqtt_task(void *pvParameters)
 	MQTT_t mqttBuf;
 	while (1) {
 		xQueueReceive(xQueuePublish, &mqttBuf, portMAX_DELAY);
+		ESP_LOGI(TAG, "type=%d", mqttBuf.topic_type);
 
 		EventBits_t EventBits = xEventGroupGetBits(mqtt_status_event_group);
-		//ESP_LOGI(TAG, "EventBits=%x", EventBits);
+		ESP_LOGI(TAG, "EventBits=%x", EventBits);
 		if (EventBits & MQTT_CONNECTED_BIT) {
 			if (mqttBuf.topic_type == PUBLISH) {
-				ESP_LOGI(TAG, "Topic :%s\t\tData :%s", mqttBuf.topic, mqttBuf.data);
-				esp_mqtt_client_publish(client, mqttBuf.topic, mqttBuf.data, mqttBuf.data_len, 0, 0);
-				//ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+				ESP_LOGI(TAG, "topic=%s data=%s", mqttBuf.topic, mqttBuf.data);
+				int msg_id = esp_mqtt_client_publish(client, mqttBuf.topic, mqttBuf.data, 0, 1, 0);
+				ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 			} else if (mqttBuf.topic_type == STOP) {
 				ESP_LOGI(TAG, "Task Stop");
 				break;

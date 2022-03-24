@@ -23,7 +23,6 @@
 #include "esp_system.h"
 #include "esp_crc.h"
 #include "esp_smartconfig.h"
-#include "mqtt_client.h"
 #include "esp_tls.h"
 #include "esp_ota_ops.h"
 //#include "esp_now.h"
@@ -47,10 +46,11 @@
 
 static const char *TAG = "MQTTS_EXAMPLE";
 
-
-extern uint8_t GPIO_OUTPUT_IO[4];
 uint8_t TOUCH_PAD[4] = {4, 5, 6, 7};
-
+extern uint8_t GPIO_OUTPUT_IO[4];
+extern bool led_state[4];
+extern const char *controls_device[4];
+extern const char *status_device[4];
 
 
 //Smartconfig
@@ -68,7 +68,7 @@ static uint16_t s_pad_init_val[TOUCH_PAD_MAX];
 static bool s_pad_state[TOUCH_PAD_MAX] = {false};
 static bool s_pad_change[TOUCH_PAD_MAX] = {false};
 
-static bool led_state[4] = {false};
+
 
 
 //Queqe ,event handle
@@ -137,11 +137,12 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "PASSWORD:%s", password);
         if (evt->type == SC_TYPE_ESPTOUCH_V2) {
             ESP_ERROR_CHECK( esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)) );
-            ESP_LOGI(TAG, "RVD_DATA:");
-            for (int i=0; i<33; i++) {
-                printf("%02x ", rvd_data[i]);
-            }
-            printf("\n");
+            ESP_LOGI(TAG, "RVD_DATA:%s", rvd_data);
+
+            // for (int i=0; i<33; i++) {
+            //     printf("%02x ", rvd_data[i]);
+            // }
+            // printf("\n");
         }
 
 
@@ -305,71 +306,48 @@ static void mygpio_init(void)
  */
 static void tp_example_read_task(void *pvParameter)
 {
+    MQTT_t mqttBuf;
+    bzero(led_state,4);
     uint16_t touch_filter_value;
     for (int i = 0; i < 4; i++) {
         touch_pad_read_filtered(TOUCH_PAD[i], &s_pad_init_val[TOUCH_PAD[i]]);
     }
-
     while (1) {
         for (int i = 0; i < 4; i++) {
             touch_pad_read_filtered(TOUCH_PAD[i], &touch_filter_value);
 
             if(touch_filter_value < s_pad_init_val[TOUCH_PAD[i]]*9/10){
-                if(s_pad_state[TOUCH_PAD[i]] == true){
-                    s_pad_change[TOUCH_PAD[i]] = false;
-                } else {
-                    s_pad_change[TOUCH_PAD[i]] = true;
+                if(s_pad_state[TOUCH_PAD[i]] == false)
+                {
+                    led_state[i] = !led_state[i];
                     gpio_set_level(GPIO_OUTPUT_IO[i], led_state[i]);
                     ESP_LOGI(TAG, "Device %d change",i);
                     s_pad_change[TOUCH_PAD[i]] = false;
-                    led_state[i] = !led_state[i];
 
+                    mqttBuf.topic_type = PUBLISH;
+                    strcpy(mqttBuf.topic, status_device[i]);
+                    mqttBuf.topic_len = strlen(status_device[i]);
+                    if(led_state[i] == true){
+                        strcpy(mqttBuf.data, "on");
+                        mqttBuf.data_len = 2;
+                    }else{
+                        strcpy(mqttBuf.data, "off");
+                        mqttBuf.data_len = 3;
+                    }
+                    xQueueSend(xQueuePublish, &mqttBuf, 0);
                 }
                 s_pad_state[TOUCH_PAD[i]] = true;
-
             } else {
                 s_pad_state[TOUCH_PAD[i]] = false;
             }
         }
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(70 / portTICK_PERIOD_MS);
     }
 }
-
-// static void controls_device_task(void *pvParameter){
-
-//     while(1){
-//         for (int i = TOUCH_PAD_0; i <= TOUCH_PAD_3; i++) {
-//             if(s_pad_change[i] == true){
-//                 switch (i){
-//                     case TOUCH_PAD_0:
-//                         gpio_set_level(GPIO_OUTPUT_IO_0, led_state[i]);
-//                         ESP_LOGI(TAG, "Device 1 change");
-//                         break;
-//                     case TOUCH_PAD_1:
-//                         gpio_set_level(GPIO_OUTPUT_IO_1, 1);
-//                         ESP_LOGI(TAG, "Device 2 change");
-//                         break;
-//                     case TOUCH_PAD_2:
-//                         gpio_set_level(GPIO_OUTPUT_IO_2, 1);
-//                         ESP_LOGI(TAG, "Device 3 change");
-//                         break;
-//                     case TOUCH_PAD_3:
-//                         gpio_set_level(GPIO_OUTPUT_IO_3, 1);
-//                         ESP_LOGI(TAG, "Device 4 change");
-//                         break;
-//                 }
-//                 s_pad_change[i] = false;
-//             }
-//         }
-//     vTaskDelay(100 / portTICK_PERIOD_MS);
-//     }
-    
-// }
 
 
 static void tp_example_touch_pad_init(void)
 {
-
     for (int i = 0; i < 4; i++) {
         touch_pad_config(TOUCH_PAD[i], TOUCH_THRESH_NO_USE);
     }
@@ -415,13 +393,21 @@ void app_main(void)
     tp_example_touch_pad_init();
     touch_pad_filter_start(TOUCHPAD_FILTER_TOUCH_PERIOD);
     
+    status_device[0] = "ctu/khuongiot/idb1806262/status/device1";
+    status_device[1] = "ctu/khuongiot/idb1806262/status/device2";
+    status_device[2] = "ctu/khuongiot/idb1806262/status/device3";
+    status_device[3] = "ctu/khuongiot/idb1806262/status/device4";
+
+    controls_device[0] = "ctu/khuongiot/idb1806262/controls/device1";
+    controls_device[1] = "ctu/khuongiot/idb1806262/controls/device2";
+    controls_device[2] = "ctu/khuongiot/idb1806262/controls/device3";
+    controls_device[3] = "ctu/khuongiot/idb1806262/controls/device4";
 
     xQueuePublish = xQueueCreate( 10, sizeof(MQTT_t));
     //example_espnow_init();
     xTaskCreate(btn_smartconfig_task, "btn_smartconfig_task", 2048, NULL, 4, NULL);
     // Start a task to show what pads have been touched
-    xTaskCreate(&tp_example_read_task, "touch_pad_read_task", 2048, NULL, 5, NULL);
-    //xTaskCreate(&controls_device_task, "controls_device_task", 2048, NULL, 5, NULL);
+    xTaskCreate(&tp_example_read_task, "touch_pad_read_task", 2048, NULL, 4, NULL);
     xTaskCreate(mqtt_task, "mqtt_task", 2048*4, NULL, 4, NULL);
     
 }
