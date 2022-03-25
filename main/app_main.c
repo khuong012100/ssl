@@ -47,7 +47,7 @@
 static const char *TAG = "MQTTS_EXAMPLE";
 
 uint8_t TOUCH_PAD[4] = {4, 5, 6, 7};
-extern uint8_t GPIO_OUTPUT_IO[4];
+extern uint8_t GPIO_OUTPUT_IO[6];
 extern bool led_state[4];
 extern const char *controls_device[4];
 extern const char *status_device[4];
@@ -280,6 +280,8 @@ static void mygpio_init(void)
     GPIO_OUTPUT_IO[1] = 19;
     GPIO_OUTPUT_IO[2] = 21;
     GPIO_OUTPUT_IO[3] = 23;
+    GPIO_OUTPUT_IO[3] = 16;
+    GPIO_OUTPUT_IO[3] = 17;
     unsigned long long  GPIO_OUTPUT_PIN_SEL = 0;
     GPIO_OUTPUT_PIN_SEL = ((1<<GPIO_OUTPUT_IO[0])+(1<<GPIO_OUTPUT_IO[1])+(1<<GPIO_OUTPUT_IO[2])+(1<<GPIO_OUTPUT_IO[3])+(1<<GREEN_LED_STATUS)+(1<<RED_LED_STATUS));
     gpio_config_t io_conf;

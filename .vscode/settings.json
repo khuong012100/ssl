@@ -8,7 +8,7 @@
         "interface/ftdi/esp32_devkitj_v1.cfg",
         "target/esp32.cfg"
     ],
-    "idf.pythonBinPathWin": "C:\\Users\\khuon\\.espressif\\python_env\\idf4.4_py3.8_env\\Scripts\\python.exe",
+    "idf.pythonBinPathWin": "C:\\Users\\khuon\\.espressif\\python_env\\idf4.4_py3.9_env\\Scripts\\python.exe",
     "idf.toolsPathWin": "C:\\Users\\khuon\\.espressif",
     "idf.portWin": "COM5",
     "idf.flashType": "UART"
